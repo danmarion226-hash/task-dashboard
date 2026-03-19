@@ -25,6 +25,7 @@ export function Dashboard({ username, email }: DashboardProps) {
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isUpdatingDueDateById, setIsUpdatingDueDateById] = useState<Record<string, boolean>>({});
 
   const loadTasks = useCallback(async () => {
     setTasksError(null);
@@ -110,6 +111,26 @@ export function Dashboard({ username, email }: DashboardProps) {
 
     if (!response.ok || !payload.task) {
       setTasksError(payload.error ?? "Could not update task.");
+      return;
+    }
+
+    setTasks((prev) => prev.map((item) => (item.id === task.id ? payload.task! : item)));
+  }
+
+  async function updateTaskDueDate(task: Task, dueDate: string | null) {
+    setIsUpdatingDueDateById((prev) => ({ ...prev, [task.id]: true }));
+
+    const response = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ due_date: dueDate }),
+    });
+    const payload = (await response.json()) as { task?: Task; error?: string };
+
+    setIsUpdatingDueDateById((prev) => ({ ...prev, [task.id]: false }));
+
+    if (!response.ok || !payload.task) {
+      setTasksError(payload.error ?? "Could not update due date.");
       return;
     }
 
@@ -239,31 +260,51 @@ export function Dashboard({ username, email }: DashboardProps) {
             ) : (
               <ul className="space-y-2">
                 {tasks.map((task) => (
-                  <li
-                    key={task.id}
-                    className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
-                  >
-                    <button type="button" className="mr-2 text-left" onClick={() => void toggleTask(task)}>
-                      <p
-                        className={`text-sm transition ${
-                          task.is_completed ? "text-zinc-500 line-through" : "text-zinc-200"
-                        }`}
+                  <li key={task.id} className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <button type="button" className="mr-2 text-left" onClick={() => void toggleTask(task)}>
+                        <p
+                          className={`text-sm transition ${
+                            task.is_completed ? "text-zinc-500 line-through" : "text-zinc-200"
+                          }`}
+                        >
+                          {task.title}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-red-300 transition hover:text-red-200"
+                        onClick={() => void deleteTask(task)}
                       >
-                        {task.title}
-                      </p>
-                      {task.due_date ? (
-                        <p className="text-xs text-zinc-500">Due {task.due_date}</p>
-                      ) : (
-                        <p className="text-xs text-zinc-600">No due date</p>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className="text-xs text-red-300 transition hover:text-red-200"
-                      onClick={() => void deleteTask(task)}
-                    >
-                      Delete
-                    </button>
+                        Delete
+                      </button>
+                    </div>
+
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={task.due_date ?? ""}
+                        onChange={(event) =>
+                          setTasks((prev) =>
+                            prev.map((item) =>
+                              item.id === task.id ? { ...item, due_date: event.target.value || null } : item
+                            )
+                          )
+                        }
+                        className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 outline-none focus:border-zinc-500"
+                      />
+                      <button
+                        type="button"
+                        className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-60"
+                        onClick={() => void updateTaskDueDate(task, task.due_date)}
+                        disabled={Boolean(isUpdatingDueDateById[task.id])}
+                      >
+                        {isUpdatingDueDateById[task.id] ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {task.due_date ? `Due ${task.due_date}` : "No due date"}
+                    </p>
                   </li>
                 ))}
               </ul>
